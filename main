@@ -404,7 +404,7 @@ local title = createTextLabel("Title", "Auto Star Gacha", UDim2.new(1, 0, 1, 0),
 title.TextXAlignment = Enum.TextXAlignment.Center
 title.Parent = header
 
-local credit = createTextLabel("Credit", "Credit: Rza", UDim2.new(1, 0, 0, 15), UDim2.new(0, 0, 1, -15), Color3.fromRGB(150, 150, 150), 12, Enum.Font.Gotham, 12)
+local credit = createTextLabel("Credit", "By: Rza", UDim2.new(1, 0, 0, 15), UDim2.new(0, 0, 1, -15), Color3.fromRGB(150, 150, 150), 12, Enum.Font.Gotham, 12)
 credit.TextXAlignment = Enum.TextXAlignment.Center
 credit.Parent = header
 
