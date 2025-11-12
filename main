@@ -1,0 +1,582 @@
+local LocalPlayer = game:GetService("Players").LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+-- Sembunyikan notifikasi
+LocalPlayer.PlayerGui.Notifications.Normal.Visible = false
+
+-- Variables
+local AutoStar = false
+local Star = 1
+local OpenAmount = 15
+local Stars = {}
+local AntiAFK = false
+local AntiAFKCooldown = 30 -- 30 detik
+
+-- Isi tabel Stars dengan angka 1 sampai 27
+for i = 1, 27 do
+    table.insert(Stars, i)
+end
+
+-- Buat ScreenGui untuk UI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "AutoStarUI"
+ScreenGui.Parent = LocalPlayer.PlayerGui
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Fungsi untuk membuat elemen UI dengan gaya modern
+local function createFrame(name, size, position, backgroundColor, transparency, cornerRadius, zindex)
+    local frame = Instance.new("Frame")
+    frame.Name = name
+    frame.Size = size
+    frame.Position = position
+    frame.BackgroundColor3 = backgroundColor
+    frame.BackgroundTransparency = transparency
+    frame.BorderSizePixel = 0
+    frame.ZIndex = zindex or 1
+    
+    if cornerRadius then
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = UDim.new(0, cornerRadius)
+        uiCorner.Parent = frame
+    end
+    
+    return frame
+end
+
+local function createTextLabel(name, text, size, position, textColor, textSize, font, zindex)
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.Size = size
+    label.Position = position
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = textColor
+    label.TextSize = textSize
+    label.Font = font
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.ZIndex = zindex or 1
+    
+    return label
+end
+
+local function createButton(name, text, size, position, backgroundColor, textColor, callback, zindex)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = size
+    button.Position = position
+    button.BackgroundColor3 = backgroundColor
+    button.BackgroundTransparency = 0
+    button.Text = text
+    button.TextColor3 = textColor
+    button.TextSize = 14
+    button.Font = Enum.Font.GothamSemibold
+    button.AutoButtonColor = false
+    button.ZIndex = zindex or 1
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 8)
+    uiCorner.Parent = button
+    
+    local uiStroke = Instance.new("UIStroke")
+    uiStroke.Color = Color3.fromRGB(40, 40, 40)
+    uiStroke.Thickness = 1
+    uiStroke.Parent = button
+    
+    -- Efek hover
+    local originalColor = backgroundColor
+    local hoverColor = Color3.fromRGB(
+        math.min(255, originalColor.R * 255 + 20),
+        math.min(255, originalColor.G * 255 + 20),
+        math.min(255, originalColor.B * 255 + 20)
+    )
+    
+    button.MouseEnter:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = hoverColor})
+        tween:Play()
+    end)
+    
+    button.MouseLeave:Connect(function()
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(button, tweenInfo, {BackgroundColor3 = originalColor})
+        tween:Play()
+    end)
+    
+    button.MouseButton1Click:Connect(function()
+        -- Efek klik
+        local tweenInfo = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(button, tweenInfo, {BackgroundTransparency = 0.3})
+        tween:Play()
+        
+        wait(0.1)
+        
+        local tweenBack = TweenService:Create(button, tweenInfo, {BackgroundTransparency = 0})
+        tweenBack:Play()
+        
+        callback()
+    end)
+    
+    return button
+end
+
+local function createToggle(name, text, size, position, defaultValue, callback, zindex)
+    local toggleFrame = createFrame(name, size, position, Color3.fromRGB(40, 40, 40), 0, 12, zindex)
+    
+    local toggleButton = createFrame("ToggleButton", UDim2.new(0.5, 0, 0.8, 0), UDim2.new(0.05, 0, 0.1, 0), Color3.fromRGB(80, 80, 80), 0, 10, zindex + 1)
+    toggleButton.Parent = toggleFrame
+    
+    local toggleLabel = createTextLabel("ToggleLabel", text, UDim2.new(0.7, 0, 1, 0), UDim2.new(0.3, 0, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, zindex + 1)
+    toggleLabel.Parent = toggleFrame
+    toggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local isToggled = defaultValue
+    
+    local function updateToggle()
+        if isToggled then
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(toggleButton, tweenInfo, {
+                Position = UDim2.new(0.45, 0, 0.1, 0),
+                BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+            })
+            tween:Play()
+        else
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(toggleButton, tweenInfo, {
+                Position = UDim2.new(0.05, 0, 0.1, 0),
+                BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+            })
+            tween:Play()
+        end
+        callback(isToggled)
+    end
+    
+    toggleFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            isToggled = not isToggled
+            updateToggle()
+        end
+    end)
+    
+    updateToggle()
+    
+    return toggleFrame
+end
+
+local function createSlider(name, text, size, position, minValue, maxValue, defaultValue, callback, zindex)
+    local sliderFrame = createFrame(name, size, position, Color3.fromRGB(40, 40, 40), 0, 8, zindex)
+    
+    local sliderLabel = createTextLabel("SliderLabel", text, UDim2.new(1, 0, 0.3, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, zindex + 1)
+    sliderLabel.Parent = sliderFrame
+    
+    local valueLabel = createTextLabel("ValueLabel", tostring(defaultValue), UDim2.new(0.2, 0, 0.3, 0), UDim2.new(0.8, 0, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, zindex + 1)
+    valueLabel.Parent = sliderFrame
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    
+    local track = createFrame("Track", UDim2.new(0.9, 0, 0.3, 0), UDim2.new(0.05, 0, 0.6, 0), Color3.fromRGB(60, 60, 60), 0, 4, zindex + 1)
+    track.Parent = sliderFrame
+    
+    local fill = createFrame("Fill", UDim2.new(0, 0, 1, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 170, 255), 0, 4, zindex + 2)
+    fill.Parent = track
+    
+    local thumb = createFrame("Thumb", UDim2.new(0, 12, 0, 12), UDim2.new(0, 0, 0.5, -6), Color3.fromRGB(240, 240, 240), 0, 6, zindex + 3)
+    thumb.Parent = track
+    
+    local currentValue = defaultValue
+    
+    local function updateSlider(value)
+        currentValue = math.floor(value)
+        valueLabel.Text = tostring(currentValue)
+        
+        local percentage = (currentValue - minValue) / (maxValue - minValue)
+        fill.Size = UDim2.new(percentage, 0, 1, 0)
+        thumb.Position = UDim2.new(percentage, -6, 0.5, -6)
+        
+        callback(currentValue)
+    end
+    
+    local dragging = false
+    
+    local function updateFromInput(input)
+        local relativeX = (input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X
+        relativeX = math.clamp(relativeX, 0, 1)
+        local value = minValue + (maxValue - minValue) * relativeX
+        updateSlider(value)
+    end
+    
+    thumb.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+        end
+    end)
+    
+    thumb.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            updateFromInput(input)
+            dragging = true
+        end
+    end)
+    
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+            updateFromInput(input)
+        end
+    end)
+    
+    updateSlider(defaultValue)
+    
+    return sliderFrame
+end
+
+local function createDropdown(name, text, size, position, options, defaultValue, callback, zindex)
+    local dropdownFrame = createFrame(name, size, position, Color3.fromRGB(40, 40, 40), 0, 8, zindex)
+    
+    local dropdownLabel = createTextLabel("DropdownLabel", text, UDim2.new(0.7, 0, 1, 0), UDim2.new(0, 10, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, zindex + 1)
+    dropdownLabel.Parent = dropdownFrame
+    
+    local selectedLabel = createTextLabel("SelectedLabel", tostring(defaultValue), UDim2.new(0.3, 0, 1, 0), UDim2.new(0.7, 0, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, zindex + 1)
+    selectedLabel.Parent = dropdownFrame
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Right
+    
+    -- Frame untuk dropdown arrow
+    local arrowFrame = createFrame("ArrowFrame", UDim2.new(0, 20, 0, 20), UDim2.new(0.85, -10, 0.5, -10), Color3.fromRGB(60, 60, 60), 0, 4, zindex + 1)
+    arrowFrame.Parent = dropdownFrame
+    
+    local arrowLabel = createTextLabel("ArrowLabel", "▼", UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(180, 180, 180), 12, Enum.Font.Gotham, zindex + 2)
+    arrowLabel.TextXAlignment = Enum.TextXAlignment.Center
+    arrowLabel.Parent = arrowFrame
+    
+    -- Options frame dengan scrolling - ZINDEX TINGGI agar muncul di depan
+    local optionsFrame = createFrame("OptionsFrame", UDim2.new(1, 0, 0, 150), UDim2.new(0, 0, 1, 5), Color3.fromRGB(50, 50, 50), 0, 8, 100) -- ZIndex tinggi
+    optionsFrame.Visible = false
+    optionsFrame.Parent = ScreenGui -- Parent ke ScreenGui langsung, bukan dropdownFrame
+    optionsFrame.ClipsDescendants = true
+    
+    -- Scrolling frame untuk opsi
+    local scrollingFrame = Instance.new("ScrollingFrame")
+    scrollingFrame.Name = "ScrollingFrame"
+    scrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+    scrollingFrame.Position = UDim2.new(0, 0, 0, 0)
+    scrollingFrame.BackgroundTransparency = 1
+    scrollingFrame.BorderSizePixel = 0
+    scrollingFrame.ScrollBarThickness = 6
+    scrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+    scrollingFrame.CanvasSize = UDim2.new(0, 0, 0, #options * 35)
+    scrollingFrame.ZIndex = 101
+    scrollingFrame.Parent = optionsFrame
+    
+    local uiListLayout = Instance.new("UIListLayout")
+    uiListLayout.Parent = scrollingFrame
+    uiListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    uiListLayout.Padding = UDim.new(0, 5)
+    
+    local currentValue = defaultValue
+    
+    local function updateDropdownPosition()
+        -- Update position optionsFrame berdasarkan position dropdownFrame
+        local dropdownAbsolutePos = dropdownFrame.AbsolutePosition
+        local dropdownAbsoluteSize = dropdownFrame.AbsoluteSize
+        
+        optionsFrame.Position = UDim2.new(0, dropdownAbsolutePos.X, 0, dropdownAbsolutePos.Y + dropdownAbsoluteSize.Y + 5)
+        optionsFrame.Size = UDim2.new(0, dropdownAbsoluteSize.X, 0, 150)
+    end
+    
+    local function updateDropdown(value)
+        currentValue = value
+        selectedLabel.Text = tostring(value)
+        optionsFrame.Visible = false
+        
+        -- Rotate arrow back
+        local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(arrowLabel, tweenInfo, {Rotation = 0})
+        tween:Play()
+        
+        callback(value)
+    end
+    
+    -- Buat tombol untuk setiap opsi dengan ZIndex tinggi
+    for i, option in ipairs(options) do
+        local optionButton = createButton("Option" .. i, "Star " .. tostring(option), UDim2.new(1, -10, 0, 30), UDim2.new(0, 5, 0, (i-1)*35), Color3.fromRGB(60, 60, 60), Color3.fromRGB(220, 220, 220), function()
+            updateDropdown(option)
+        end, 102) -- ZIndex tinggi untuk tombol
+        optionButton.Parent = scrollingFrame
+        optionButton.AutoButtonColor = true
+    end
+    
+    local function toggleDropdown()
+        optionsFrame.Visible = not optionsFrame.Visible
+        
+        if optionsFrame.Visible then
+            -- Update position sebelum menampilkan
+            updateDropdownPosition()
+            
+            -- Rotate arrow
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(arrowLabel, tweenInfo, {Rotation = 180})
+            tween:Play()
+            
+            -- Auto scroll to selected option
+            local selectedIndex = table.find(options, currentValue)
+            if selectedIndex then
+                local targetPosition = (selectedIndex - 1) * 35
+                scrollingFrame.CanvasPosition = Vector2.new(0, math.max(0, targetPosition - 50))
+            end
+        else
+            -- Rotate arrow back
+            local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+            local tween = TweenService:Create(arrowLabel, tweenInfo, {Rotation = 0})
+            tween:Play()
+        end
+    end
+    
+    dropdownFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            toggleDropdown()
+        end
+    end)
+    
+    -- Close dropdown ketika klik di luar
+    local function closeDropdown(input)
+        if optionsFrame.Visible and input.UserInputType == Enum.UserInputType.MouseButton1 then
+            local isInBounds = optionsFrame.AbsolutePosition:X() <= input.Position.X and input.Position.X <= optionsFrame.AbsolutePosition:X() + optionsFrame.AbsoluteSize:X() and
+                              optionsFrame.AbsolutePosition:Y() <= input.Position.Y and input.Position.Y <= optionsFrame.AbsolutePosition:Y() + optionsFrame.AbsoluteSize:Y()
+            
+            local isDropdownBounds = dropdownFrame.AbsolutePosition:X() <= input.Position.X and input.Position.X <= dropdownFrame.AbsolutePosition:X() + dropdownFrame.AbsoluteSize:X() and
+                                    dropdownFrame.AbsolutePosition:Y() <= input.Position.Y and input.Position.Y <= dropdownFrame.AbsolutePosition:Y() + dropdownFrame.AbsoluteSize:Y()
+            
+            if not isInBounds and not isDropdownBounds then
+                optionsFrame.Visible = false
+                local tweenInfo = TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+                local tween = TweenService:Create(arrowLabel, tweenInfo, {Rotation = 0})
+                tween:Play()
+            end
+        end
+    end
+    
+    UserInputService.InputBegan:Connect(closeDropdown)
+    
+    -- Update position ketika main container bergerak
+    local function onContainerMoved()
+        if optionsFrame.Visible then
+            updateDropdownPosition()
+        end
+    end
+    
+    updateDropdown(defaultValue)
+    
+    return dropdownFrame, onContainerMoved
+end
+
+-- Fungsi Anti AFK
+local function pressSpaceKey()
+    -- Simulate key press using VirtualInputManager
+    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+    wait(0.1)
+    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+    
+    print("Anti AFK: Space pressed at " .. os.date("%X"))
+end
+
+-- Variabel untuk timer Anti AFK
+local lastAFKTime = 0
+local afkStatusLabel
+local afkTimerLabel
+
+-- Buat UI utama dengan ZIndex yang tepat
+local mainContainer = createFrame("MainContainer", UDim2.new(0, 320, 0, 450), UDim2.new(0.5, -160, 0.5, -225), Color3.fromRGB(30, 30, 30), 0, 12, 10)
+mainContainer.Parent = ScreenGui
+
+-- Header dengan judul
+local header = createFrame("Header", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 0), Color3.fromRGB(25, 25, 25), 0, 12, 11)
+header.Parent = mainContainer
+
+local title = createTextLabel("Title", "Auto Star Gacha", UDim2.new(1, 0, 1, 0), UDim2.new(0, 0, 0, 0), Color3.fromRGB(0, 170, 255), 18, Enum.Font.GothamSemibold, 12)
+title.TextXAlignment = Enum.TextXAlignment.Center
+title.Parent = header
+
+local credit = createTextLabel("Credit", "Credit: Neutral", UDim2.new(1, 0, 0, 15), UDim2.new(0, 0, 1, -15), Color3.fromRGB(150, 150, 150), 12, Enum.Font.Gotham, 12)
+credit.TextXAlignment = Enum.TextXAlignment.Center
+credit.Parent = header
+
+-- Konten
+local content = createFrame("Content", UDim2.new(1, -20, 1, -60), UDim2.new(0, 10, 0, 50), Color3.fromRGB(30, 30, 30), 1, 0, 11)
+content.Parent = mainContainer
+
+-- Toggle Auto Star
+local autoStarToggle = createToggle("AutoStarToggle", "Auto Star Gacha", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 10), false, function(value)
+    AutoStar = value
+    print("Auto Star:", value)
+end, 12)
+
+autoStarToggle.Parent = content
+
+-- Dropdown Select Star dengan scroll - dengan callback untuk update position
+local starDropdown, onDropdownMoved = createDropdown("StarDropdown", "Select Star", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 60), Stars, Star, function(value)
+    Star = value
+    print("Selected Star:", Star)
+end, 12)
+
+starDropdown.Parent = content
+
+-- Slider Open Amount
+local amountSlider = createSlider("AmountSlider", "Open Amount", UDim2.new(1, 0, 0, 60), UDim2.new(0, 0, 0, 110), 1, 100, OpenAmount, function(value)
+    OpenAmount = value
+    print("Open Amount set to:", OpenAmount)
+end, 12)
+
+amountSlider.Parent = content
+
+-- Toggle Anti AFK
+local antiAFKToggle = createToggle("AntiAFKToggle", "Anti AFK", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 180), false, function(value)
+    AntiAFK = value
+    if value then
+        lastAFKTime = os.time()
+        print("Anti AFK: Activated")
+    else
+        print("Anti AFK: Deactivated")
+    end
+end, 12)
+
+antiAFKToggle.Parent = content
+
+-- Status Anti AFK
+local afkStatusFrame = createFrame("AFKStatusFrame", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 230), Color3.fromRGB(40, 40, 40), 0, 8, 12)
+afkStatusFrame.Parent = content
+
+afkStatusLabel = createTextLabel("AFKStatusLabel", "Anti AFK: Inactive", UDim2.new(0.6, 0, 0.5, 0), UDim2.new(0, 10, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, 13)
+afkStatusLabel.Parent = afkStatusFrame
+
+afkTimerLabel = createTextLabel("AFKTimerLabel", "Next: --:--", UDim2.new(0.4, 0, 0.5, 0), UDim2.new(0.6, 0, 0, 0), Color3.fromRGB(180, 180, 180), 12, Enum.Font.Gotham, 13)
+afkTimerLabel.TextXAlignment = Enum.TextXAlignment.Right
+afkTimerLabel.Parent = afkStatusFrame
+
+-- Button Roll Star Once
+local rollButton = createButton("RollButton", "Roll Star Once", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 280), Color3.fromRGB(0, 120, 215), Color3.fromRGB(255, 255, 255), function()
+    ReplicatedStorage.Events.To_Server:FireServer({
+        Open_Amount = OpenAmount,
+        Action = "_Stars", 
+        Name = "Star_" .. Star
+    })
+    print("Manual roll - Star:", Star, "Amount:", OpenAmount)
+end, 12)
+
+rollButton.Parent = content
+
+-- Status indicator
+local statusFrame = createFrame("StatusFrame", UDim2.new(1, 0, 0, 40), UDim2.new(0, 0, 0, 330), Color3.fromRGB(40, 40, 40), 0, 8, 12)
+statusFrame.Parent = content
+
+local statusLabel = createTextLabel("StatusLabel", "Auto Star: Inactive", UDim2.new(0.7, 0, 1, 0), UDim2.new(0, 10, 0, 0), Color3.fromRGB(220, 220, 220), 14, Enum.Font.Gotham, 13)
+statusLabel.Parent = statusFrame
+
+local statusIndicator = createFrame("StatusIndicator", UDim2.new(0, 10, 0, 10), UDim2.new(0.9, 0, 0.5, -5), Color3.fromRGB(255, 50, 50), 0, 5, 13)
+statusIndicator.Parent = statusFrame
+
+-- Close button
+local closeButton = createButton("CloseButton", "X", UDim2.new(0, 25, 0, 25), UDim2.new(1, -30, 0, 5), Color3.fromRGB(255, 60, 60), Color3.fromRGB(255, 255, 255), function()
+    ScreenGui:Destroy()
+end, 20) -- ZIndex tinggi untuk close button
+
+closeButton.Parent = mainContainer
+
+-- Buat UI dapat digerakkan
+local dragging = false
+local dragInput
+local dragStart
+local startPos
+
+local function update(input)
+    local delta = input.Position - dragStart
+    mainContainer.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    
+    -- Update dropdown position ketika container bergerak
+    onDropdownMoved()
+end
+
+header.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainContainer.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+header.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        dragInput = input
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        update(input)
+    end
+end)
+
+-- Loop utama untuk auto star dan anti AFK
+RunService.RenderStepped:Connect(function()
+    local currentTime = os.time()
+    
+    -- Auto Star Logic
+    if AutoStar then
+        ReplicatedStorage.Events.To_Server:FireServer({
+            Open_Amount = OpenAmount,
+            Action = "_Stars",
+            Name = "Star_" .. Star
+        })
+        
+        -- Update status
+        statusLabel.Text = "Auto Star: Active"
+        statusIndicator.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+    else
+        -- Update status
+        statusLabel.Text = "Auto Star: Inactive"
+        statusIndicator.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    end
+    
+    -- Anti AFK Logic
+    if AntiAFK then
+        local timeSinceLastAFK = currentTime - lastAFKTime
+        local timeUntilNextAFK = AntiAFKCooldown - timeSinceLastAFK
+        
+        -- Update AFK status
+        afkStatusLabel.Text = "Anti AFK: Active"
+        afkStatusLabel.TextColor3 = Color3.fromRGB(50, 255, 50)
+        
+        -- Update timer
+        if timeUntilNextAFK > 0 then
+            afkTimerLabel.Text = "Next: " .. timeUntilNextAFK .. "s"
+        else
+            afkTimerLabel.Text = "Next: Now"
+        end
+        
+        -- Press space every 30 seconds
+        if timeSinceLastAFK >= AntiAFKCooldown then
+            pressSpaceKey()
+            lastAFKTime = currentTime
+        end
+    else
+        -- Update AFK status
+        afkStatusLabel.Text = "Anti AFK: Inactive"
+        afkStatusLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+        afkTimerLabel.Text = "Next: --:--"
+    end
+end)
+
+print("Auto Star Gacha UI with Anti AFK loaded successfully!")
